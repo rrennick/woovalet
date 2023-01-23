@@ -1,0 +1,168 @@
+#!/usr/bin/env bash
+#
+# Create a site for WooCommerce development. Keys not included.
+# By Automattic
+#
+# Based on the work of giants:
+# * Jason Conroy and Brent Shepherd @ Prospress (Automattic)
+# * ValetPress by Aaron Rutley: https://github.com/AaronRutley/valetpress
+
+# login creds
+ADMIN_USER=$(whoami)
+ADMIN_PASS=password
+ADMIN_EMAIL_DOMAIN=@example.com
+DEFAULT_PROJECT_NAME=woocommerce
+
+# styles
+V_NONE='\033[00m'
+V_RED='\033[01;31m'
+V_GREEN='\033[01;32m'
+V_YELLOW='\033[01;33m'
+V_PURPLE='\033[01;35m'
+V_CYAN='\033[01;36m'
+V_WHITE='\033[01;37m'
+V_BOLD='\033[1m'
+V_UNDERLINE='\033[4m'
+
+# switch to the recommended root directory for Valet
+[[ ! -d ~/Sites ]] && mkdir ~/Sites
+cd ~/Sites
+
+# make sure this directory is setup in Valet
+valet park
+
+echo -e "${V_BOLD}Welcome to Woo Valet, allow me to create you a new site ${V_NONE}"
+
+# get a project name
+echo -e "${V_YELLOW}Project Name:${V_NONE} \c"
+read project_name
+if [ -z "$project_name" ]
+then
+  project_name="$DEFAULT_PROJECT_NAME"
+  echo -e "${V_RED}*** No project name provided, defaulting to ${V_GREEN}${project_name}${V_NONE}"
+fi
+
+# create a project directory
+if [ -d "${project_name}" || -e "${project_name}" ]
+then
+  echo -e "${V_RED}*** ${project_name} already exists ${V_NONE}"
+  return
+fi
+mkdir ${project_name}
+
+# switch to the project directory
+project_root="$(pwd)/${project_name}"
+cd ${project_root}
+
+# get the MySQL username
+echo -e "${V_YELLOW}MariaDB or MySQL password for root user (if any):${V_NONE} \c"
+read mysql_pass
+if [ -z "${mysql_pass}" ]
+then
+  mysql_pass=""
+  echo -e "${V_RED}*** No password provided, defaulting to empty string${V_NONE}"
+fi
+
+# download wordpress files
+wp core download
+
+# create wp-config.php file
+wp core config --dbname="${project_name}" \
+  --dbuser=root \
+  --dbpass="${mysql_pass}" \
+  --dbhost=127.0.0.1 \
+  --extra-php <<PHP
+define( 'WP_DEBUG', true );
+define( 'WP_DEBUG_LOG', true );
+define( 'WP_DEBUG_DISPLAY', false );
+define( 'SCRIPT_DEBUG', true );
+define( 'FORCE_SSL_ADMIN', true );
+PHP
+
+# create the database based on info in the wp-config.php
+wp db create
+
+# install wp tables
+wp core install --url="${project_name}.localhost" \
+  --title="${project_name}.localhost" \
+  --admin_user="${ADMIN_USER}" \
+  --admin_password=password \
+  --admin_email="${project_name}${ADMIN_EMAIL_DOMAIN}"
+
+echo -e "${V_GREEN}Success:${V_NONE} WordPress installed..."
+
+# don't use .dev for development, use .localhost, a reserved TLD for development: https://iyware.com/dont-use-dev-for-development/
+valet domain localhost
+valet link "${project_name}"
+
+# serve the project over SSL/TLS
+valet secure "${project_name}"
+
+echo -e "${V_GREEN}Success:${V_NONE} ${project_name} will now be served over TLS/SSL..."
+
+# ensure permalink structure is as expected
+wp rewrite structure '/%year%/%monthnum%/%postname%'
+
+# flush rules to set .htaccess ( --hard doesn't seem to work combined with the above command )
+wp rewrite flush --hard
+
+# discourage search engines from indexing the site
+wp option set blog_public 0
+
+# remove cruft
+wp plugin uninstall hello
+wp plugin uninstall akismet
+
+# get a version or branch
+echo -e "${V_YELLOW}Version or branch of WooCommerce to install (leave blank for trunk):${V_NONE} \c"
+read wc_version
+if [ -z "${wc_version}" ]
+then
+  wc_version="trunk"
+  echo -e "${V_RED}*** No version name provided, defaulting to ${V_GREEN}${wc_version}${V_NONE}"
+else
+  wc_depth="--depth 1"
+fi
+
+# install & activate WooCommerce from the Git repo
+cd wp-content
+git clone git@github.com:woocommerce/woocommerce.git --branch ${wc_version} ${wc_depth}
+ln -s woocommerce/plugins/woocommerce plugins/woocommerce
+
+# force SSL in WooCommerce
+wp option update woocommerce_force_ssl_checkout yes
+wp plugin activate woocommerce
+
+echo -e "${V_GREEN}Success:${V_NONE} WooCommerce installed..."
+
+# install plugins
+wp plugin install woocommerce-gateway-stripe
+wp plugin install \
+  woocommerce-payments \
+  wp-mail-logging \
+  debug-bar \
+  query-monitor \
+  wordpress-importer --activate
+
+echo -e "${V_GREEN}Success:${V_NONE} Plugins installed..."
+wp plugin list
+
+# import WooCommerce Dummy data
+wp import ${project_root}/wp-content/plugins/woocommerce/dummy-data/dummy-data.xml --authors=skip
+
+echo -e "${V_GREEN}Success:${V_NONE} WooCommerce dummy data installed..."
+
+# install storefront theme
+wp theme install storefront --activate
+
+echo -e "${V_GREEN}Success:${V_NONE} Storefront theme installed..."
+
+wp db export --add-drop-table
+
+echo -e "${V_GREEN}Success:${V_NONE} Project Created: ${V_UNDERLINE}https://${project_name}.localhost/${V_NONE}"
+echo -e "URL:  ${V_UNDERLINE}https://$project_name.localhost/wp-admin/${V_NONE}"
+echo -e "USER: ${ADMIN_USER}"
+echo -e "PASS: ${ADMIN_PASS}"
+
+# switch to project
+cd ${project_root}
