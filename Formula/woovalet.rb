@@ -28,6 +28,8 @@ class Woovalet < Formula
   # Install laravel/valet
   system 'composer', 'global', 'require', 'laravel/valet'
   system 'valet', 'install'
+  # Start the DB server
+  system 'mysql.server', 'start'
 
   def install
     bin.install 'woovalet'
