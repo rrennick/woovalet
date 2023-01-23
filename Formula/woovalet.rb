@@ -3,7 +3,7 @@ class Woovalet < Formula
 
 #  homepage "https://github.com/rrennick/woovalet/"
 #  url 'https://github.com/rrennick/woovalet.git' #, using: :git, :tag => "v0.1"
-  version '1.0.0'
+  version '1.0.1'
 
 #  head do
     url 'https://github.com/rrennick/woovalet.git', branch: 'main'
@@ -25,9 +25,6 @@ class Woovalet < Formula
   depends_on 'nvm'
   depends_on 'pnpm'
 
-  # Install laravel/valet
-  system 'composer', 'global', 'require', 'laravel/valet'
-  system 'valet', 'install'
   # Start the DB server
   system 'mysql.server', 'start'
 
