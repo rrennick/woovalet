@@ -3,7 +3,7 @@ class Woovalet < Formula
 
 #  homepage "https://github.com/rrennick/woovalet/"
 #  url 'https://github.com/rrennick/woovalet.git' #, using: :git, :tag => "v0.1"
-  version '1.0.1'
+  version '1.0.2'
 
 #  head do
     url 'https://github.com/rrennick/woovalet.git', branch: 'main'
@@ -22,7 +22,7 @@ class Woovalet < Formula
   depends_on 'composer'
   depends_on 'wp-cli'
   depends_on 'git'
-  depends_on 'nvm'
+  depends_on 'nvm' => '16'
   depends_on 'pnpm'
 
   # Start the DB server
@@ -30,5 +30,11 @@ class Woovalet < Formula
 
   def install
     bin.install 'woovalet'
+  end
+
+  def caveats; <<~EOS
+    Run 'sudo mysql_secure_installation'  to enable root user access to MySQL (if it has not been run already).
+    Ensure the MySQL root user has a password.
+  EOS
   end
 end

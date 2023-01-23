@@ -31,29 +31,31 @@ cd ~/Sites
 # make sure this directory is setup in Valet
 if [ -z "$(command -v valet)" ]
 then
-  echo installing valet
   composer global require laravel/valet
-  valet install
+  composer_dir="$(composer config --list --global | grep data-dir | cut -f2 -d' ')"
+  ${composer_dir}/vendor/laravel/valet/valet install
   valet park
-else
-  echo valet install skipped
+
+  # don't use .dev for development, use .localhost, a reserved TLD for development: https://iyware.com/dont-use-dev-for-development/
+  echo -e "${V_YELLOW}Valet uses the '.dev' TLD by default. Answer 'Y' to use '.localhost'${V_NONE} \c"
+  valet domain localhost
 fi
 
-echo "${V_BOLD}Welcome to Woo Valet, allow me to create you a new site ${V_NONE}"
+echo -e "${V_BOLD}Welcome to Woo Valet, allow me to create you a new site ${V_NONE}"
 
 # get a project name
-echo "${V_YELLOW}Project Name:${V_NONE} \c"
+echo -e "${V_YELLOW}Project Name:${V_NONE} \c"
 read project_name
 if [ -z "${project_name}" ]
 then
   project_name="${DEFAULT_PROJECT_NAME}"
-  echo "${V_RED}*** No project name provided, defaulting to ${V_GREEN}${project_name}${V_NONE}"
+  echo -e "${V_RED}*** No project name provided, defaulting to ${V_GREEN}${project_name}${V_NONE}"
 fi
 
 # create a project directory
-if [ -d "${project_name}" || -e "${project_name}" ]
+if [ -e "${project_name}" ]
 then
-  echo "${V_RED}*** ${project_name} already exists ${V_NONE}"
+  echo -e "${V_RED}*** ${project_name} already exists ${V_NONE}"
   exit
 fi
 mkdir ${project_name}
@@ -63,12 +65,12 @@ project_root="$(pwd)/${project_name}"
 cd ${project_root}
 
 # get the MySQL username
-echo "${V_YELLOW}MariaDB or MySQL password for root user (if any):${V_NONE} \c"
+echo -e "${V_YELLOW}MariaDB or MySQL password for root user (if any):${V_NONE} \c"
 read mysql_pass
 if [ -z "${mysql_pass}" ]
 then
   mysql_pass=""
-  echo "${V_RED}*** No password provided, defaulting to empty string${V_NONE}"
+  echo -e "${V_RED}*** No password provided, defaulting to empty string${V_NONE}"
 fi
 
 # download wordpress files
@@ -97,16 +99,13 @@ wp core install --url="${project_name}.localhost" \
   --admin_password=password \
   --admin_email="${project_name}${ADMIN_EMAIL_DOMAIN}"
 
-echo "${V_GREEN}Success:${V_NONE} WordPress installed..."
-
-# don't use .dev for development, use .localhost, a reserved TLD for development: https://iyware.com/dont-use-dev-for-development/
-valet domain localhost
-valet link "${project_name}"
+echo -e "${V_GREEN}Success:${V_NONE} WordPress installed..."
 
 # serve the project over SSL/TLS
+valet link "${project_name}"
 valet secure "${project_name}"
 
-echo "${V_GREEN}Success:${V_NONE} ${project_name} will now be served over TLS/SSL..."
+echo -e "${V_GREEN}Success:${V_NONE} ${project_name} will now be served over TLS/SSL..."
 
 # ensure permalink structure is as expected
 wp rewrite structure '/%year%/%monthnum%/%postname%'
@@ -122,26 +121,33 @@ wp plugin uninstall hello
 wp plugin uninstall akismet
 
 # get a version or branch
-echo "${V_YELLOW}Version or branch of WooCommerce to install (leave blank for trunk):${V_NONE} \c"
+echo -e "${V_YELLOW}Version or branch of WooCommerce to install (leave blank for trunk):${V_NONE} \c"
 read wc_version
 if [ -z "${wc_version}" ]
 then
   wc_version="trunk"
-  echo "${V_RED}*** No version name provided, defaulting to ${V_GREEN}${wc_version}${V_NONE}"
+  echo -e "${V_RED}*** No version name provided, defaulting to ${V_GREEN}${wc_version}${V_NONE}"
 else
   wc_depth="--depth 1"
 fi
 
 # install & activate WooCommerce from the Git repo
-cd wp-content
+cd ${project_root}/wp-content
 git clone git@github.com:woocommerce/woocommerce.git --branch ${wc_version} ${wc_depth}
-ln -s woocommerce/plugins/woocommerce plugins/woocommerce
+cd ${project_root}/wp-content/woocommerce
+nvm use
+pnpm install
+pnpm run build
+
+# add woocommerce to WP plugins folder
+cd ${project_root}/wp-content/plugins
+ln -s ../woocommerce/plugins/woocommerce woocommerce
 
 # force SSL in WooCommerce
 wp option update woocommerce_force_ssl_checkout yes
 wp plugin activate woocommerce
 
-echo "${V_GREEN}Success:${V_NONE} WooCommerce installed..."
+echo -e "${V_GREEN}Success:${V_NONE} WooCommerce installed..."
 
 # install plugins
 wp plugin install woocommerce-gateway-stripe
@@ -152,25 +158,25 @@ wp plugin install \
   query-monitor \
   wordpress-importer --activate
 
-echo "${V_GREEN}Success:${V_NONE} Plugins installed..."
+echo -e "${V_GREEN}Success:${V_NONE} Plugins installed..."
 wp plugin list
 
 # import WooCommerce Dummy data
 wp import ${project_root}/wp-content/plugins/woocommerce/dummy-data/dummy-data.xml --authors=skip
 
-echo "${V_GREEN}Success:${V_NONE} WooCommerce dummy data installed..."
+echo -e "${V_GREEN}Success:${V_NONE} WooCommerce dummy data installed..."
 
 # install storefront theme
 wp theme install storefront --activate
 
-echo "${V_GREEN}Success:${V_NONE} Storefront theme installed..."
+echo -e "${V_GREEN}Success:${V_NONE} Storefront theme installed..."
 
 wp db export --add-drop-table
 
-echo "${V_GREEN}Success:${V_NONE} Project Created: ${V_UNDERLINE}https://${project_name}.localhost/${V_NONE}"
-echo "URL:  ${V_UNDERLINE}https://${project_name}.localhost/wp-admin/${V_NONE}"
-echo "USER: ${ADMIN_USER}"
-echo "PASS: ${ADMIN_PASS}"
+echo -e "${V_GREEN}Success:${V_NONE} Project Created: ${V_UNDERLINE}https://${project_name}.localhost/${V_NONE}"
+echo -e "URL:  ${V_UNDERLINE}https://${project_name}.localhost/wp-admin/${V_NONE}"
+echo -e "USER: ${ADMIN_USER}"
+echo -e "PASS: ${ADMIN_PASS}"
 
 # switch to project
 cd ${project_root}
